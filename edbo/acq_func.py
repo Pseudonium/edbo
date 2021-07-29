@@ -72,6 +72,24 @@ class acquisition:
             self.function = random(batch_size, duplicates)
         elif 'greedy' in function.lower():
             self.function = eps_greedy(batch_size, duplicates)
+        ######################
+        ##### MY CODE ########
+        ######################
+        elif function.lower() == 'ts-ei':
+            self.function = TS_hybrid('EI', batch_size, duplicates)
+        elif function.lower() == 'ts-pi':
+            self.function = TS_hybrid('PI', batch_size, duplicates)
+        elif function.lower() == 'ts-ucb':
+            self.function = TS_hybrid('UCB', batch_size, duplicates)
+        elif function.lower() == 'ts-rand':
+            self.function = TS_hybrid('Random', batch_size, duplicates)
+        elif function.lower() == 'ts-meanmax':
+            self.function = TS_hybrid('MeanMax', batch_size, duplicates)
+        elif function.lower() == 'ts-varmax':
+            self.function = TS_hybrid('VarMax', batch_size, duplicates)
+        #########################
+        ###### END OF MY CODE ###
+        #########################
         else:
             print('edbo bot: Specify a valid acquisition function.')
     
@@ -706,6 +724,8 @@ class hybrid_TS:
                     sort=False)
         
         return proposed
+    
+
 
 # Batching via epsilon-greedy-like policy
 
@@ -838,4 +858,119 @@ class random:
         
         return candidates.sample(self.batch_size)
 
+
+
+################
+##### MY CODE ##
+################
+
+# Batching with a single TS and then the rest by acquisition function
+
+class TS_hybrid:
+    """Class represents the hybrid Thompson sampling algorithm.
     
+    Provides a framework for selecting experimental conditions for parallel 
+    optimization via Thompson sampling for the first sample and 
+    any acquisition function for the remaining batch_size - 1 points.
+    """
+    
+    # Same as for hybrid_TS
+    def __init__(self, hybrid, batch_size, duplicates):
+        """
+        Parameters
+        ----------
+        hybrid : edbo.acq_funcs:
+            hybrid method to be used. 
+        batch_size : int
+            Number of points to select.
+        duplicates : bool
+            Select duplicate domain points.
+        
+        """
+        
+        self.hybrid = hybrid
+        self.batch_size = batch_size
+        self.duplicates = duplicates
+        
+        # This is the acquisition function being used
+        # in addition to Thompson sampling
+        self.hybrid_func = None
+        
+        if batch_size > 1:
+            # Need something else to handle the rest of the items
+            # If it's EI, PI or UCB, need a Kriging_believer
+            # But otherwise we just need it to... work.
+            # Hmm
+            
+            kriging_dict = {
+                'EI': expected_improvement,
+                'PI': probability_of_improvement,
+                'UCB': upper_confidence_bound,
+                'MeanMax': mean,
+                'VarMax': variance
+            }
+            
+            
+            if hybrid in kriging_dict:
+                self.hybrid_func = Kriging_believer(kriging_dict[hybrid], batch_size - 1, duplicates)
+            else:
+                # That means we know it's random sampling
+                self.hybrid_func = random(batch_size - 1, duplicated)
+            
+    
+    def run(self, model, obj):
+        """Run Hybrid-TS algorithm on a trained model and user defined domain.
+        
+        Parameters
+        ----------
+        model : edbo.models 
+            Trained model to be sampled.
+        obj : edbo.objective 
+            Objective object containing information about the domain.
+        
+        Returns
+        ----------
+        pandas.DataFrame 
+            Selected domain points.
+        """
+        
+        # TS for the first sample
+        
+        # Draw samples from posterior
+        domain = to_torch(obj.domain, gpu=obj.gpu)
+        samples = model.sample_posterior(domain, 1)
+        columns = list(obj.domain.columns.values)
+        columns.append('sample')
+        
+        self.samples = torch_to_numpy(samples, gpu=obj.gpu)
+
+        # ArgMax each posterior draw
+        arg_maxs = pd.DataFrame(columns=columns)
+        
+        # Loop not strictly required here but will keep just to make sure I don't break the code!
+        sample_i = join_to_df(samples[0], obj.domain, gpu=obj.gpu)
+        known_X = pd.concat([
+                obj.results.drop(obj.target, axis=1),
+                #proposed, # didn't need this because proposed hasn't been made yet
+                arg_maxs.drop('sample', axis=1)],
+                sort=False
+                )
+        arg_max_i = argmax(sample_i, known_X, duplicates=self.duplicates)
+        
+        # De-duplication
+        if self.duplicates == False:
+            proposed = arg_max_i.drop('sample', axis=1)
+            
+        else:
+            proposed = pd.DataFrame(
+                        data=obj.domain.iloc[[arg_max_i]], 
+                        columns=obj.domain.columns)
+        
+        # Rest will use alternative acquisition function
+        
+        if self.batch_size > 1:
+            proposed = pd.concat(
+                [proposed, self.hybrid_func.run(model, obj)],
+                sort=False)
+        
+        return proposed
