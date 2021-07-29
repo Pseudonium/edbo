@@ -1,4 +1,0 @@
-,base_SMILES_index,ligand_SMILES_index,solvent_SMILES_index,Concentration_index,Temp_C_index,yield
-1493,O=C([O-])C(C)(C)C.[K+],P(C1=CC=CO1)(C2=CC=CO2)C3=CC=CO3,CCCCOC(C)=O,0.153,120,31.43
-999,O=C([O-])C.[K+],FC(F)(F)C1=CC(P(C2=C(C3=C(C(C)C)C=C(C(C)C)C=C3C(C)C)C(OC)=CC=C2OC)C4=CC(C(F)(F)F)=CC(C(F)(F)F)=C4)=CC(C(F)(F)F)=C1,CC1=CC=C(C)C=C1,0.057,90,3.79
-738,O=C([O-])C(C)(C)C.[Cs+],CP(C)C1=CC=CC=C1,CC(N(C)C)=O,0.057,90,0.0
