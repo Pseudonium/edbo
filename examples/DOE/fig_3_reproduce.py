@@ -9,6 +9,8 @@ import matplotlib
 from sklearn.cluster import KMeans
 import math
 import numpy as np
+from sklearn import metrics
+from edbo.plot_utils import pred_obs
 
 #############################
 #############################
@@ -85,6 +87,7 @@ bo = BO_express(components,                                 # Reaction parameter
                 batch_size=1,                              # 10 experiments per round
                 target='yield')                             # Optimize yield
 print("Instantiated BO object...")
+
 # BO_express actually automatically chooses priors
 # We can reset them manually to make sure they match the ones from our paper
 from gpytorch.priors import GammaPrior
@@ -122,6 +125,10 @@ axs.scatter([item[0] for item in data_embedded], [item[1] for item in data_embed
 RESULT_PATH='data/suzuki/experiment_index.csv'
 NUM_ROUNDS=10
 
+# Manually adding exindex
+
+bo.obj.exindex = pd.read_csv(RESULT_PATH)
+
 path_cm = matplotlib.cm.get_cmap(name='Reds')
 path_norm = matplotlib.colors.Normalize(vmin=0.0, vmax=NUM_ROUNDS)
 
@@ -149,7 +156,7 @@ def fill_in_experiment_values(input_path):
         f.write(newfile)
 
 
-def workflow(export_path, count=0, indices=None, fig=0):
+def workflow(export_path, count=0, indices=None, fig=0, plot=True):
     #Function for our BO pipeline.
     
     if indices is None:
@@ -197,11 +204,24 @@ print(bo.get_experiments())               # Print selected experiments
 fill_in_experiment_values(FOLDER_PATH + 'init.csv')
 bo.add_results(FOLDER_PATH + 'init.csv')
 
-for num in range(NUM_ROUNDS):
+
+human_readable_domain_data = bo.reaction.base_data[bo.reaction.index_headers]
+results_array = np.array([FULL_RESULT_DICT[",".join(human_readable_domain_data.iloc[i].tolist())] for i in range(len(human_readable_domain_data))])
+
+# The point of the ",".join is that the .tolist() returns all the descriptors in order as a list
+# And then we join them with commas to form the search key for the results dict
+
+
+for num in range(50):
     print("Starting round ", num)
-    #pdb.set_trace()
     try:
-        indices = workflow(FOLDER_PATH + 'round' + str(num) + '.csv', count=num, indices=indices, fig=0)
+        indices = workflow(
+            FOLDER_PATH + 'round' + str(num) + '.csv',
+            count=num,
+            indices=indices,
+            fig=0,
+            plot = num < 10 # So don't plot subsequent 10 experiments
+        )
     except RuntimeError as e:
         print(e)
         print("No idea how to fix this, seems to occur randomly for different seeds...")
@@ -209,7 +229,19 @@ for num in range(NUM_ROUNDS):
     fill_in_experiment_values(FOLDER_PATH + 'round' + str(num) + '.csv')
     bo.add_results(FOLDER_PATH + "round" + str(num) + ".csv")
     print("Finished round ", num)
-
+    
+    #pred = bo.obj.scaler.unstandardize(bo.model.predict(bo.obj.results.drop('yield', axis=1).values))
+    #obs = bo.obj.results_input()['yield'].values
+    #pred_obs(pred, obs, title='Training')
+    
+    #pred = bo.obj.scaler.unstandardize(bo.model.predict(bo.obj.domain.values))
+    #obs = bo.obj.exindex['yield'].values
+    #pdb.set_trace()
+    #pred_obs(pred, obs, title='Full Space Fit')
+    pred = np.array(bo.obj.scaler.unstandardize(bo.model.predict(bo.obj.domain.values)))
+    print(f"Current R^2 value is {metrics.r2_score(results_array, pred)}")
+    
+    #bo.model.regression()
 
 indices = None
 
