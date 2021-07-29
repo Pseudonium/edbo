@@ -1,0 +1,3 @@
+,electrophile_SMILES_index,nucleophile_SMILES_index,ligand_SMILES_index,base_SMILES_index,solvent_SMILES_index,yield
+2244,IC1=CC=C(N=CC=C2)C2=C1,CC1=CC=C(N(C2CCCCO2)N=C3)C3=C1B(O)O,CC(C)(P(C(C)(C)C)[c-]1cccc1)C.CC(C)(P(C(C)(C)C)[c-]2cccc2)C.[Fe+2],CCN(CC)CC,O=CN(C)C,49.28
+2259,IC1=CC=C(N=CC=C2)C2=C1,CC1=CC=C(N(C2CCCCO2)N=C3)C3=C1B(O)O,CC(C)(P(C(C)(C)C)[c-]1cccc1)C.CC(C)(P(C(C)(C)C)[c-]2cccc2)C.[Fe+2],CC([O-])C.[Li+],C1COCC1,66.01
