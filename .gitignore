@@ -596,3 +596,4 @@ examples/DOE/test_bo_direct_arylation/round10.csv
 examples/DOE/test_bo_direct_arylation/round1.csv
 examples/DOE/test_bo_direct_arylation/round0.csv
 examples/DOE/test_bo_direct_arylation/init.csv
+harvard-clean-energy/moldata.csv
