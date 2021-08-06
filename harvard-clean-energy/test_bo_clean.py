@@ -3,9 +3,13 @@ from edbo.bro import BO_express
 
 import random
 from edbo.feature_utils import mordred
+from rdkit import Chem
+from rdkit.Chem import AllChem
+import time
 
 MASTER_SEED = 69                      # Nice
 SAMPLE_SIZE = 5 * (10 ** 3)
+SAMPLE_SIZE = 10 ** 4
 
 print("Starting encoding!")
 
@@ -13,7 +17,7 @@ components = {
     'chemical': '<defined in descriptor_matrices>'
 }
 
-full_clean_df = pd.read_csv('moldata.csv')[[
+full_clean_df = pd.read_csv('moldata_clean.csv')[[
     "SMILES_str",
     "e_homo_alpha",
     "e_lumo_alpha",
@@ -29,8 +33,9 @@ sample_clean_df = full_clean_df.iloc[
 sample_clean_df.set_index('SMILES_str', inplace=True)
 scd = sample_clean_df
 
-
 print("Now generating the mordred descriptors...")
+
+"""
 descriptors = pd.concat(
     [
         mordred(
@@ -40,19 +45,20 @@ descriptors = pd.concat(
     ],
     axis=1
 )
-#print(descriptors)
+"""
 
-print("Initialising bo")
-bo = BO_express(
-    reaction_components=components,
-    encoding={},
-    descriptor_matrices={'chemical': descriptors},
-    acquisition_function='TS',
-    init_method='rand',
-    target='pce',
-    batch_size=5,
+encoded_df = pd.DataFrame.from_records(
+    [
+        AllChem.GetMorganFingerprintAsBitVect(
+            Chem.MolFromSmiles(item), 2, nBits=512
+        ) for item in scd.index
+    ]
 )
-print("Finished setting up bo!")
+
+encoded_df.insert(0, 'chemical_SMILES', scd.index)
+
+# This prevents errors with the bo
+encoded_df.columns = encoded_df.columns.astype(str)
 
 
 def fill_in_experiment_values(input_path):
@@ -82,21 +88,58 @@ def fill_in_experiment_values(input_path):
     with open(input_path, 'w') as f:
         f.write(newfile)
 
-bo.init_sample(MASTER_SEED)
-print(bo.get_experiments())
-bo.export_proposed('init.csv')
-fill_in_experiment_values('init.csv')
-bo.add_results('init.csv')
 
-def workflow(export_path):
+def workflow(bo, export_path):
     bo.run()
     bo.export_proposed(export_path)
     fill_in_experiment_values(export_path)
     bo.add_results(export_path)
 
-for num in range(10):
-    print("Starting round ", num)
-    workflow(f"round{num}.csv")
-    print("Finished round ", num)
 
-bo.plot_convergence()
+def simulate_bo(seed, batch_size, num_rounds):
+    print("Initialising bo")
+    bo = BO_express(
+        reaction_components=components,
+        encoding={},
+        descriptor_matrices={'chemical': encoded_df},
+        acquisition_function='EI',
+        init_method='rand',
+        target='pce',
+        batch_size=batch_size,
+    )
+    print("Finished setting up bo!")
+
+    bo.init_sample(seed)
+    print(bo.get_experiments())
+    bo.export_proposed('init.csv')
+    fill_in_experiment_values('init.csv')
+    bo.add_results('init.csv')
+
+    for num in range(num_rounds):
+        print("Starting round ", num)
+        workflow(bo, f"round{num}.csv")
+        print("Finished round ", num)
+
+    results = pd.DataFrame(columns=bo.reaction.index_headers + ['pce'])
+    for path in ['init'] + ['round' + str(num) for num in range(num_rounds)]:
+        results = pd.concat([results, pd.read_csv(path + '.csv', index_col=0)], sort=False)
+
+    results = results.sort_values('pce', ascending=False)
+
+    top_yields = results.head()['pce'].tolist()
+    return top_yields[0]
+
+random.seed(MASTER_SEED)
+seeds = random.sample(range(10 ** 6), 50)
+
+results_file_path = "harvard_randomei_10_100_50.csv"
+results_file = "seed,maximum observed pce" + "\n"
+
+
+for index, seed in enumerate(seeds):
+    print("On number ", index)
+    simulation_result = simulate_bo(seed, 10, 10)
+    results_file += str(seed) + "," + str(simulation_result) + "\n"
+
+with open(results_file_path, 'w') as f:
+    f.write(results_file)
