@@ -1,26 +1,28 @@
-# Imports
-
-### Going to use custom edbo implementation (changed the acq_func.py file to add my custom functions)
-## So, need to point to that folder
-# Answer via https://stackoverflow.com/questions/4383571/importing-files-from-different-folder
-
 import sys
 sys.path.insert(1, '../..')
-
 import pandas as pd
-#from edbo.utils import Data
-#from edbo.bro import BO_express, BO
-
-## This ensures we import from the custom files
-
 from edbo.utils import Data
-from edbo.bro import BO_express, BO
-
+from edbo.bro import BO_express
 from gpytorch.priors import GammaPrior
-import numpy as np
-import matplotlib.pyplot as plt
 import random
-import pdb
+import os.path
+
+RESULT_PATH = 'data/suzuki/experiment_index.csv'
+FOLDER_PATH = "test_bo_suzuki/"
+MASTER_SEED = 42
+N_EXPERIMENTS = 50
+METHODS = ['EI', 'TS', 'TS-EI']
+BATCH_ROUNDS = [(1, 50), (2, 25), (3, 17), (4, 12), (5, 10), (10, 5)]
+
+random.seed(MASTER_SEED)  # Ensures repeatability
+SEEDS = random.sample(range(10 ** 6), N_EXPERIMENTS)
+
+# Going to use custom edbo implementation
+# (changed the acq_func.py file to add my custom functions)
+# So, need to point to that folder
+# Answer via
+# https://stackoverflow.com/questions/
+# 4383571/importing-files-from-different-folder
 
 #############################
 #############################
@@ -48,8 +50,8 @@ print("Loaded csv files...")
 # Use Data.drop method to drop descriptors containing some unwanted keywords
 
 for data in reactants:
-    data.drop(['file_name', 'vibration', 'correlation', 'Rydberg', 
-               'correction', 'atom_number', 'E-M_angle', 'MEAN', 'MAXG', 
+    data.drop(['file_name', 'vibration', 'correlation', 'Rydberg',
+               'correction', 'atom_number', 'E-M_angle', 'MEAN', 'MAXG',
                'STDEV'])
 
 print("Dropped unnecessary data...")
@@ -85,122 +87,89 @@ encoding = {}
 ############################
 ############################
 
-FOLDER_PATH = "test_bo_suzuki/"
+with open(RESULT_PATH) as f:
+    FULL_RESULT_DICT = {
+        ",".join(
+            line.split(",")[1:-1]
+        ): float(
+            line.split(",")[-1][:-1]
+        ) for line in f.readlines()[1:]
+    }
 
-def simulate(seed=1, RESULT_PATH="", BATCH_SIZE=5, NUM_ROUNDS=5):
-
-    # BO object
-    bo = BO_express(components,                                 # Reaction parameters
-                    encoding=encoding,                          # Encoding specification
-                    descriptor_matrices=dft,                    # DFT descriptors
-                    acquisition_function='TS-EI',                  # Use expectation value of improvement
-                    ########################
-                    #######################
-                    ##### USING THOMPSON SAMPLING with EI
-                    #######################
-                    init_method='rand',                         # Use random initialization
-                    batch_size=BATCH_SIZE,                              # 10 experiments per round
-                    target='yield')                             # Optimize yield
-    print("Instantiated BO object...")
-    # BO_express actually automatically chooses priors
-    # We can reset them manually to make sure they match the ones from our paper
+def instantiate_bo(acquisition_func: str, batch_size: int):
+    bo = BO_express(
+        components,
+        encoding=encoding,
+        descriptor_matrices=dft,
+        acquisition_function=acquisition_func,
+        init_method='rand',
+        batch_size=batch_size,
+        target='yield'
+    )
     bo.lengthscale_prior = [GammaPrior(2.0, 0.2), 5.0]
     bo.outputscale_prior = [GammaPrior(5.0, 0.5), 8.0]
     bo.noise_prior = [GammaPrior(1.5, 0.5), 1.0]
-    print("Constructed priors")
-    ########################
-    ########################
-    #### Initialization ####
-    ########################
-    ########################
-    print(bo.init_sample(seed=seed + 1))
-    print("HEY WAIT A MINUTE")
-    print(bo.init_sample(seed=seed))             # Initialize
-    
-    bo.export_proposed(FOLDER_PATH + 'init.csv')     # Export design to a CSV file
-    print(bo.get_experiments())               # Print selected experiments
-    ####################################
-    ####################################
-    #### Bayesian Optimization Loop ####
-    ####################################
-    ####################################
-    with open(RESULT_PATH) as f:
-        FULL_RESULT_DICT = {",".join(line.split(",")[1:-1]): float(line.split(",")[-1][:-1]) for line in f.readlines()[1:]}
-    def fill_in_experiment_values(input_path):
-        # Reading in values
-        newfile = ""
-        with open(input_path) as f:
-            # In this case f is a csv file
-            first_line = True
-            for line in f:
-                original_line = line
-                if first_line:
-                    newfile += line
-                    first_line = False
-                    continue
-                line = line.split(",")
-                search_string = ",".join(line[1:-1])
-                input_yield = FULL_RESULT_DICT[search_string]
-                line = ",".join(original_line.split(",")[:-1]) + "," + str(input_yield) + "\n"
+    return bo
+
+
+def fill_in_experiment_values(input_path):
+    # Reading in values
+    newfile = ""
+    with open(input_path) as f:
+        # In this case f is a csv file
+        first_line = True
+        for line in f:
+            original_line = line
+            if first_line:
                 newfile += line
-        with open(input_path, 'w') as f:
-            f.write(newfile)
+                first_line = False
+                continue
+            line = line.split(",")
+            search_string = ",".join(line[1:-1])
+            input_yield = FULL_RESULT_DICT[search_string]
+            line = ",".join(
+                original_line.split(",")[:-1]
+            ) + "," + str(input_yield) + "\n"
+            newfile += line
+    with open(input_path, 'w') as f:
+        f.write(newfile)
 
-    fill_in_experiment_values(FOLDER_PATH + 'init.csv')
-    bo.add_results(FOLDER_PATH + 'init.csv')
-    def plot_kb_projections(n=2):
-        #Plot 1D projection of Kriging believer parallel batch selection algorithm.
+def write_prop_read_run(bo, export_path):
+    bo.export_proposed(export_path)
+    fill_in_experiment_values(export_path)
+    bo.add_results(export_path)
+    bo.run()
 
-        fig, ax = plt.subplots(len(bo.acq.function.projections[:n]),1, figsize=(12, n * 12 / 5))
-        for i, p in enumerate(bo.acq.function.projections[:n]):
-            ax[i].plot(range(len(p)), p, color='C' + str(i))
-            ax[i].plot([np.argmax(p)], p[np.argmax(p)], 'X', markersize=10, color='black')
-            ax[i].set_xlabel('X')
-            ax[i].set_ylabel('EI')
-            ax[i].set_title('Kriging Believer Projection:' + str(i))
-        
-        plt.tight_layout()
-        plt.show()
-
-    def workflow(export_path):
-        #Function for our BO pipeline.
-        
-        bo.run()
-        #bo.plot_convergence()
-        #bo.model.regression()
-        #plot_kb_projections()
-        bo.export_proposed(export_path)
-
-    for num in range(NUM_ROUNDS):
-        print("Starting round ", num)
-        #pdb.set_trace()
-        try:
-            workflow(FOLDER_PATH + 'round' + str(num) + '.csv')
-        except RuntimeError as e:
-            print(e)
-            print("No idea how to fix this, seems to occur randomly for different seeds...")
-            break
-        fill_in_experiment_values(FOLDER_PATH + 'round' + str(num) + '.csv')
-        bo.add_results(FOLDER_PATH + "round" + str(num) + ".csv")
-        print("Finished round ", num)
-
-
+def get_max_yield(bo, num_rounds):
     results = pd.DataFrame(columns=bo.reaction.index_headers + ['yield'])
-    for path in [FOLDER_PATH + 'init'] + [FOLDER_PATH + 'round' + str(num) for num in range(NUM_ROUNDS)]:
-        results = pd.concat([results, pd.read_csv(path + '.csv', index_col=0)], sort=False)
+    for path in [
+        FOLDER_PATH + 'init'
+    ] + [
+        FOLDER_PATH + f'round{num}' for num in range(num_rounds)
+    ]:
+        results = pd.concat(
+            [results, pd.read_csv(path + '.csv', index_col=0)],
+            sort=False
+        )
+    print(results)
+    return results['yield'].max()
 
-    results = results.sort_values('yield', ascending=False)
+def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
+    bo = instantiate_bo(acquisition_func, batch_size)
+    bo.init_sample(seed=seed)
+    print(bo.get_experiments())
+    write_prop_read_run(bo, FOLDER_PATH + 'init.csv')
 
-    top_yields = results.head()['yield'].tolist()
+    for num in range(num_rounds):
+        print(f"Starting round {num}")
+        write_prop_read_run(bo, FOLDER_PATH + f"round{num}.csv")
+        print(f"Finished round {num}")
 
-    #bo.plot_convergence()
-    
-    return top_yields[0]
+    return get_max_yield(bo, num_rounds)
 
 
 
-
-#Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
+# Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
 # Key of choosingmethods:
 # random - chosen at random using expected improvement as acquisition function
 # worst - randomly chosen from bottom 10% of experiments using expected improvement
@@ -208,44 +177,31 @@ def simulate(seed=1, RESULT_PATH="", BATCH_SIZE=5, NUM_ROUNDS=5):
 # randomtsei - chosen at random using hybrid thompson sampling and expected improvement (my own modification, not the ei-ts builtin
 
 
-results_file_path = "suzuki_randomtsei_5_50_50.csv"
-results_file = "seed,maximum observed yield" + "\n"
+# New key of choosing methods (no longer doing worst)
+# EI - expected improvement
+# TS - Thompson sampling
+# TS-EI - hybrid
 
-count = 0
+for method in METHODS:
+    for batch_size, num_rounds in BATCH_ROUNDS:
+        print(
+            f"Testing bo with acquisition function {method}",
+            f"\n with a batch size of {batch_size}",
+            f"\n and doing {num_rounds} rounds",
+        )
+        results_file = "seed,maximum observed yield" + "\n"
+        path = f"suzuki_{method}_{batch_size}_{num_rounds}_{N_EXPERIMENTS}"
+        path += "_new.csv"  # To differentiate with old files
+        if os.path.isfile(path):
+            # So we've already written data to it
+            # No need to overwrite
+            continue
+        for index, seed in enumerate(SEEDS):
+            print("On number ", index)
+            result = simulate_bo(
+                seed, method, batch_size, num_rounds
+            )
+            results_file += f"{seed},{result}"
 
-for num in random.sample(range(10 ** 6), 50):
-    print("On number ", count)
-    count += 1
-    print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/suzuki/experiment_index.csv', BATCH_SIZE=5, NUM_ROUNDS=10)
-    results_file += str(num) + "," + str(simulation_result) + "\n"
-
-
-#Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
-
-results_file_path = "suzuki_randomtsei_10_50_50.csv"
-results_file = "seed,maximum observed yield" + "\n"
-
-count = 0
-
-for num in random.sample(range(10 ** 6), 50):
-    print("On number ", count)
-    count += 1
-    print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/suzuki/experiment_index.csv', BATCH_SIZE=10, NUM_ROUNDS=5)
-    results_file += str(num) + "," + str(simulation_result) + "\n"
-
-
-#Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
-
-results_file_path = "suzuki_randomtsei_3_51_50.csv"
-results_file = "seed,maximum observed yield" + "\n"
-
-count = 0
-
-for num in random.sample(range(10 ** 6), 50):
-    print("On number ", count)
-    count += 1
-    print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/suzuki/experiment_index.csv', BATCH_SIZE=3, NUM_ROUNDS=17)
-    results_file += str(num) + "," + str(simulation_result) + "\n"
+        with open(path, 'w') as f:
+            f.write(results_file)
