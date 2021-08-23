@@ -8,6 +8,7 @@ from rdkit.Chem import AllChem
 import time
 
 MASTER_SEED = 69                      # Nice
+#MASTER_SEED = 39  #  Potential bad algorithm performance
 SAMPLE_SIZE = 5 * (10 ** 3)
 SAMPLE_SIZE = 10 ** 4
 
@@ -25,27 +26,15 @@ full_clean_df = pd.read_csv('moldata_clean.csv')[[
 ]]
 
 random.seed(MASTER_SEED)  # Ensures repeatability
-
 sample_clean_df = full_clean_df.iloc[
     random.sample(range(len(full_clean_df)), SAMPLE_SIZE)
 ]
-
 sample_clean_df.set_index('SMILES_str', inplace=True)
 scd = sample_clean_df
 
-print("Now generating the mordred descriptors...")
+print(scd['pce'].max())
 
-"""
-descriptors = pd.concat(
-    [
-        mordred(
-            scd.index, name='chemical'
-        ).set_index(scd.index),  # Mordred encoding from SMILES
-        scd[["e_homo_alpha", "e_lumo_alpha"]]  # From harvard data
-    ],
-    axis=1
-)
-"""
+print("Now generating the mordred descriptors...")
 
 encoded_df = pd.DataFrame.from_records(
     [
@@ -102,7 +91,7 @@ def simulate_bo(seed, batch_size, num_rounds):
         reaction_components=components,
         encoding={},
         descriptor_matrices={'chemical': encoded_df},
-        acquisition_function='EI',
+        acquisition_function='TS',
         init_method='rand',
         target='pce',
         batch_size=batch_size,
@@ -127,19 +116,65 @@ def simulate_bo(seed, batch_size, num_rounds):
     results = results.sort_values('pce', ascending=False)
 
     top_yields = results.head()['pce'].tolist()
-    return top_yields[0]
+    return top_yields
 
 random.seed(MASTER_SEED)
 seeds = random.sample(range(10 ** 6), 50)
 
-results_file_path = "harvard_randomei_10_100_50.csv"
-results_file = "seed,maximum observed pce" + "\n"
-
+results_file_path = "harvardtop5_randomts_10_100_50.csv"
+results_file = "seed,maximum observed pce, 2, 3, 4, 5" + "\n"
 
 for index, seed in enumerate(seeds):
     print("On number ", index)
     simulation_result = simulate_bo(seed, 10, 10)
-    results_file += str(seed) + "," + str(simulation_result) + "\n"
+    print(simulation_result)
+    results_file += str(seed) + "," + ",".join(str(num) for num in simulation_result) + "\n"
 
 with open(results_file_path, 'w') as f:
     f.write(results_file)
+
+"""
+bad_subset = False
+
+seed = 2
+
+worst_result = 12 # Higher than max
+worst_seed = 0
+
+while not bad_subset:
+    random.seed(seed)
+    print("On seed: ", seed)
+    sample_clean_df = full_clean_df.iloc[
+        random.sample(range(len(full_clean_df)), SAMPLE_SIZE)
+    ]
+    sample_clean_df.set_index('SMILES_str', inplace=True)
+    scd = sample_clean_df
+
+    print("Now generating the mordred descriptors...")
+
+    encoded_df = pd.DataFrame.from_records(
+        [
+            AllChem.GetMorganFingerprintAsBitVect(
+                Chem.MolFromSmiles(item), 2, nBits=512
+            ) for item in scd.index
+        ]
+    )
+
+    encoded_df.insert(0, 'chemical_SMILES', scd.index)
+
+    # This prevents errors with the bo
+    encoded_df.columns = encoded_df.columns.astype(str)
+
+    simulation_result = simulate_bo(0, 10, 10)
+    if simulation_result < 9:
+        bad_subset = True
+        print("GOT ONE!")
+    else:
+        if simulation_result < worst_result:
+            worst_result = simulation_result
+            worst_seed = seed
+        print("Worst so far is ", worst_result, " with seed ", worst_seed)
+        seed += 1
+
+print(seed)
+"""
