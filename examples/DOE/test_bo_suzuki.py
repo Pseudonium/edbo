@@ -11,8 +11,8 @@ RESULT_PATH = 'data/suzuki/experiment_index.csv'
 FOLDER_PATH = "test_bo_suzuki/"
 MASTER_SEED = 42
 N_EXPERIMENTS = 50
-METHODS = ['EI', 'TS', 'TS-EI']
-BATCH_ROUNDS = [(1, 50), (2, 25), (3, 17), (4, 12), (5, 10), (10, 5)]
+METHODS = ['EI', 'TS', 'TS-EI', 'rand']
+BATCH_ROUNDS = [(1, 50), (2, 25), (3, 17), (4, 12), (5, 10), (6, 8), (7, 7), (8, 6), (9, 5), (9, 6), (10, 5)]
 
 random.seed(MASTER_SEED)  # Ensures repeatability
 SEEDS = random.sample(range(10 ** 6), N_EXPERIMENTS)
@@ -164,7 +164,6 @@ def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
         print(f"Starting round {num}")
         write_prop_read_run(bo, FOLDER_PATH + f"round{num}.csv")
         print(f"Finished round {num}")
-
     return get_max_yield(bo, num_rounds)
 
 
@@ -190,18 +189,18 @@ for method in METHODS:
             f"\n and doing {num_rounds} rounds",
         )
         results_file = "seed,maximum observed yield" + "\n"
-        path = f"suzuki_{method}_{batch_size}_{num_rounds}_{N_EXPERIMENTS}"
+        path = f"suzuki_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
         path += "_new.csv"  # To differentiate with old files
         if os.path.isfile(path):
             # So we've already written data to it
             # No need to overwrite
             continue
         for index, seed in enumerate(SEEDS):
-            print("On number ", index)
+            print(f"On number {index} of {N_EXPERIMENTS}")
             result = simulate_bo(
                 seed, method, batch_size, num_rounds
             )
-            results_file += f"{seed},{result}"
+            results_file += f"{seed},{result}\n"
 
         with open(path, 'w') as f:
             f.write(results_file)

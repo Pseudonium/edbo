@@ -1,5 +1,12 @@
 # Imports
 
+### Going to use custom edbo implementation (changed the acq_func.py file to add my custom functions)
+## So, need to point to that folder
+# Answer via https://stackoverflow.com/questions/4383571/importing-files-from-different-folder
+
+import sys
+sys.path.insert(1, '../..')
+
 import pandas as pd
 from edbo.utils import Data
 import pdb
@@ -69,9 +76,9 @@ def simulate(seed=1, RESULT_PATH="", BATCH_SIZE=5, NUM_ROUNDS=5):
     bo = BO_express(components,                                 # Reaction parameters
                     encoding=encoding,                          # Encoding specification
                     descriptor_matrices=dft,                    # DFT descriptors
-                    acquisition_function='TS',                  # Use expectation value of improvement
+                    acquisition_function='TS-EI',               # Use expectation value of improvement
                     ########################
-                    ####### USING TS
+                    ####### USING TS-EI
                     ##################
                     init_method='rand',                         # Use random initialization
                     batch_size=BATCH_SIZE,                              # 10 experiments per round
@@ -178,7 +185,7 @@ import random
 
 #Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
 
-results_file_path = "aryl_amination_randomts_1_50_50.csv"
+results_file_path = "aryl_amination_randomtsei_5_25_50.csv"
 results_file = "seed,maximum observed yield" + "\n"
 
 count = 0
@@ -187,43 +194,7 @@ for num in random.sample(range(10 ** 6), 50):
     print("On number ", count)
     count += 1
     print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/aryl_amination/experiment_index.csv', BATCH_SIZE=1, NUM_ROUNDS=50)
-    results_file += str(num) + "," + str(simulation_result) + "\n"
-
-with open(results_file_path, 'w') as f:
-    f.write(results_file)
-
-
-#Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
-
-results_file_path = "aryl_amination_randomts_1_25_50.csv"
-results_file = "seed,maximum observed yield" + "\n"
-
-count = 0
-
-for num in random.sample(range(10 ** 6), 50):
-    print("On number ", count)
-    count += 1
-    print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/aryl_amination/experiment_index.csv', BATCH_SIZE=1, NUM_ROUNDS=25)
-    results_file += str(num) + "," + str(simulation_result) + "\n"
-
-with open(results_file_path, 'w') as f:
-    f.write(results_file)
-
-
-#Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
-
-results_file_path = "aryl_amination_randomts_2_50_50.csv"
-results_file = "seed,maximum observed yield" + "\n"
-
-count = 0
-
-for num in random.sample(range(10 ** 6), 50):
-    print("On number ", count)
-    count += 1
-    print("SEED HERE IS ", num)
-    simulation_result = simulate(seed=num, RESULT_PATH='data/aryl_amination/experiment_index.csv', BATCH_SIZE=2, NUM_ROUNDS=25)
+    simulation_result = simulate(seed=num, RESULT_PATH='data/aryl_amination/experiment_index.csv', BATCH_SIZE=5, NUM_ROUNDS=5)
     results_file += str(num) + "," + str(simulation_result) + "\n"
 
 with open(results_file_path, 'w') as f:
