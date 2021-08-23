@@ -18,7 +18,9 @@ import random
 ###
 
 MASTER_SEED = 213090120
-COLORS = ['black', 'red', 'yellow']
+COLORS = ['#F72585', '#7209B7', '#3A0CA3', '#4361EE', '#4CC9F0']
+
+COLORS_2 = ['black', 'green', 'yellow']
 
 
 #############################
@@ -101,7 +103,6 @@ def instantiate_bo(acquisition_func: str, batch_size: int, init_method='rand'):
     bo.noise_prior = [GammaPrior(1.5, 0.5), 1.0]
     return bo
 
-"""
 bo = instantiate_bo('VarMax', 1)
 
 FOLDER_PATH = "test_bo_suzuki/"
@@ -115,21 +116,26 @@ N_CLUSTERS = 5
 kmeans = KMeans(n_clusters=N_CLUSTERS).fit_predict(bo.reaction.data)
 cm = matplotlib.cm.get_cmap(name='viridis')
 norm = matplotlib.colors.Normalize(vmin=0.0, vmax=N_CLUSTERS)
-colors = [cm(norm(thing)) for thing in kmeans]
+colors = [COLORS[thing] for thing in kmeans]
 
-fig_cluster, axs_cluster = plt.subplots(1)
-axs_cluster.scatter([item[0] for item in data_embedded], [item[1] for item in data_embedded], c=colors)
 
-axs_cluster.set_xlabel('t-SNE1')
-axs_cluster.set_ylabel('t-SNE2')
-axs_cluster.set_title('Paths taken in reaction space')
+plots = [plt.subplots(1) for i in range(1)]
+fig_clusters = [item[0] for item in plots]
+axs_clusters = [item[1] for item in plots]
 
-fig_3b, (axs_r2, axs_yield) = plt.subplots(nrows=2, ncols=1, sharex=True)
+#fig_cluster, axs_cluster = plt.subplots(1)
+for cluster in axs_clusters:
+    cluster.scatter([item[0] for item in data_embedded], [item[1] for item in data_embedded], c=colors)
+    cluster.set_xlabel('t-SNE1')
+    cluster.set_ylabel('t-SNE2')
+    cluster.set_title('Paths taken in reaction space')
 
-axs_yield.set_xlabel('Experiment')
+#fig_3b, (axs_r2, axs_yield) = plt.subplots(nrows=2, ncols=1, sharex=True)
 
-axs_r2.set_ylabel('Model fit score')
-axs_yield.set_ylabel('Observed yield')
+#axs_yield.set_xlabel('Experiment')
+
+#axs_r2.set_ylabel('Model fit score')
+#axs_yield.set_ylabel('Observed yield')
 
 ####################################
 ####################################
@@ -138,7 +144,7 @@ axs_yield.set_ylabel('Observed yield')
 ####################################
 
 RESULT_PATH = 'data/suzuki/experiment_index.csv'
-NUM_ROUNDS = 50
+NUM_ROUNDS = 10
 
 path_cm = matplotlib.cm.get_cmap(name='Reds')
 path_norm = matplotlib.colors.Normalize(vmin=0.0, vmax=NUM_ROUNDS)
@@ -169,7 +175,9 @@ def fill_in_experiment_values(input_path):
     return input_yield
 
 
-def workflow(export_path, count=0, indices=None, fig=0, plot=True):
+styles = [(0, (1, 4)), 'solid', (0, (5, 15))]
+
+def workflow(export_path, count=0, indices=None, fig=0, plot=None):
     #Function for our BO pipeline.
 
     if indices is None:
@@ -178,20 +186,23 @@ def workflow(export_path, count=0, indices=None, fig=0, plot=True):
     bo.run()
     new_experiment_index = bo.get_experiments().index[0]
     indices.append(new_experiment_index)
-    if len(indices) > 1 and plot:
-        axs_cluster.scatter([data_embedded[new_experiment_index][0]], [data_embedded[new_experiment_index][1]], color=path_cm(path_norm(count)), s=9)
+    if len(indices) > 1 and plot is not None:
+        axs_clusters[plot].scatter([data_embedded[new_experiment_index][0]], [data_embedded[new_experiment_index][1]], color=path_cm(path_norm(count)), s=9)
         x, y = data_embedded[indices[count - 1]]
         x_new, y_new = data_embedded[indices[count]]
         dx, dy = x_new - x, y_new - y
-        axs_cluster.arrow(
+        arr = axs_clusters[plot].arrow(
             x, y, dx, dy,
-            width=0.1,
+            width=0.3,
             length_includes_head=True,
             head_width = 3,
             head_length = 3,
-            linestyle='--',
-            color=COLORS[fig]
+            linestyle=styles[fig],
+            color=COLORS_2[fig]
         )
+        if len(indices) == 2:
+            # So it's the first one
+            arr.set_label(['Explorer', 'Exploiter', 'Edbo optimiser'][fig])
     bo.export_proposed(export_path)
     return indices
 
@@ -208,6 +219,7 @@ def simulate_bo(bo, fig_num):
     obs_yields = []
 
     bo.init_sample(seed=MASTER_SEED)             # Initialize
+    indices = [bo.get_experiments().index[0]]
     bo.export_proposed(FOLDER_PATH + 'init.csv')     # Export design to a CSV file
     obs_yields.append(fill_in_experiment_values(FOLDER_PATH + 'init.csv'))
     bo.add_results(FOLDER_PATH + 'init.csv')
@@ -222,7 +234,7 @@ def simulate_bo(bo, fig_num):
                 count=num,
                 indices=indices,
                 fig=fig_num,
-                plot = num < 10 # So don't plot subsequent 10 experiments
+                plot=[None, 0][num < 10]
             )
         except RuntimeError as e:
             print(e)
@@ -237,14 +249,11 @@ def simulate_bo(bo, fig_num):
 
     # The very first score tends to be very negative, so instead
     # we will ignore the first one
-    axs_r2.plot(list(range(NUM_ROUNDS))[1:], r2_values[1:], color=COLORS[fig_num])
+    #axs_r2.plot(list(range(NUM_ROUNDS))[1:], r2_values[1:], color=COLORS[fig_num])
 
-    axs_yield.plot(list(range(NUM_ROUNDS + 1)), obs_yields, color=COLORS[fig_num])
+    #axs_yield.plot(list(range(NUM_ROUNDS + 1)), obs_yields, color=COLORS[fig_num])
 
 
-"""
-
-"""
 simulate_bo(bo, 0)
 
 bo = instantiate_bo('MeanMax', 1)
@@ -254,14 +263,15 @@ simulate_bo(bo, 1)
 bo = instantiate_bo('EI', 2)
 print("Instantiated BO object...")
 simulate_bo(bo, 2)
-"""
 
+axs_clusters[0].legend()
+
+"""
 NUM_ROUNDS = 10
 NUM_AVG = 50
 
 fig_max_yield, axs_max_yield = plt.subplots(1)
 
-"""
 random.seed(MASTER_SEED)
 seeds = random.sample(range(10 ** 6), NUM_AVG)
 
@@ -326,6 +336,7 @@ full_yield_df.to_csv('fig3c.csv')
 # Have already computed the above
 # Now just need to read in the file and produce the plot
 
+"""
 full_yield_df = pd.read_csv('fig3c.csv')
 
 # Start with plotting the graph, which needs the average, as well as the
@@ -339,3 +350,6 @@ print('Initial result dataframe: ', result_df)
 print(r'Now aggregated into mean: \n', result_df.agg(func='mean').loc('4'))
 print('New result dataframe: ', result_df)
 print('Full one is still untouched: ', full_yield_df)
+"""
+
+plt.show()
