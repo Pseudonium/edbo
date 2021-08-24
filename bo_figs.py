@@ -77,7 +77,11 @@ for i, (max_i, array) in enumerate(zip(
     [y_pred, y_pred, y_pred + 1.5 * sigma]
 )):
     ax_2.plot(x[max_i], array[max_i], '.', color=COLORS[2])
-    ax_2.annotate(str(i + 1), (x[max_i], array[max_i] + 0.2), fontweight='bold')
+    if i == 0:
+        xy = (x[max_i], array[max_i] - 1.5)
+    else:
+        xy = (x[max_i], array[max_i] + 0.3)
+    ax_2.annotate(str(i + 1), xy, fontweight='bold', fontsize=14)
 
 
 ax_2.legend(loc='upper left')
