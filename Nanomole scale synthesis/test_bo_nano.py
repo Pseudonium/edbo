@@ -13,7 +13,7 @@ MASTER_SEED = 42
 N_EXPERIMENTS = 50
 METHODS = ['EI', 'TS', 'TS-EI']
 METHODS = ['EI']
-METHODS = ['EI', 'rand']
+METHODS = ['EI', 'rand', 'TS']
 BATCH_ROUNDS = [(1, 50), (2, 25), (3, 17), (4, 12), (5, 10), (6, 8), (7, 7), (8, 6), (9, 5), (9, 6), (10, 5)]
 BATCH_ROUNDS = [(1, 50), (3, 17), (5, 10), (10, 5)]
 
@@ -81,7 +81,7 @@ bases = [
     'CCN=P(N=P(N(C)C)(N(C)C)N(C)C)(N(C)C)N(C)C'
 ]
 
-'''
+
 # Now, gotta get mordreds for all of these
 
 mordred_dfs = [
@@ -135,7 +135,7 @@ descriptor_matrix.insert(0, 'Configuration', list(";;;".join(key.split(",")) for
 descriptor_matrix.columns = descriptor_matrix.columns.astype(str)
 
 print(descriptor_matrix)
-'''
+
 
 # Parameters in reaction space
 
@@ -147,11 +147,11 @@ components = {
     'base': bases,
 }
 
-'''
+
 components = {
     'Configuration': '<defined in descriptor_matrices>'
 }
-'''
+
 
 # External descriptor matrices override specified encoding
 
@@ -272,7 +272,7 @@ for method in METHODS:
             f"\n and doing {num_rounds} rounds",
         )
         results_file = "seed,maximum observed yield" + "\n"
-        path = f"nano_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
+        path = f"nanofixed_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
         path += "_new.csv"  # To differentiate with old files
         if os.path.isfile(path):
             # So we've already written data to it
