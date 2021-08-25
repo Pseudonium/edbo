@@ -182,7 +182,7 @@ def instantiate_bo(acquisition_func: str, batch_size: int):
         components,
         encoding={},
         acquisition_function=acquisition_func,
-        #descriptor_matrices = {'Configuration': descriptor_matrix},
+        descriptor_matrices = {'Configuration': descriptor_matrix},
         init_method='rand',
         batch_size=batch_size,
         target='MISER Area Count'
@@ -208,8 +208,8 @@ def fill_in_experiment_values(input_path):
             line = line.split(",")
             search_string = ",".join(line[1:-1])
             search_string = ",".join(search_string.split(";;;"))
-            #input_area = FULL_RESULT_DICT[search_string]
-            input_area = FULL_RESULT_DICT.get(search_string, 0)
+            input_area = FULL_RESULT_DICT[search_string]
+            #input_area = FULL_RESULT_DICT.get(search_string, 0)
             line = ",".join(
                 original_line.split(",")[:-1]
             ) + "," + str(input_area) + "\n"
