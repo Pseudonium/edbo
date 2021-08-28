@@ -41,6 +41,14 @@ class acquisition:
             self.function = Kriging_believer(expected_improvement,
                                              batch_size,
                                              duplicates)
+        elif function.lower().startswith(
+            'ei-'
+        ) and function.lower()[3:].isnumeric():
+            self.function = Kriging_believer(
+                partial(expected_improvement, k=int(function.lower()[3:])),
+                batch_size,
+                duplicates
+            )
         elif function.lower() == 'pi':
             self.function = Kriging_believer(probability_of_improvement,
                                              batch_size,
