@@ -1,16 +1,24 @@
+import sys
+sys.path.insert(1, '../')
 import pandas as pd
 from edbo.bro import BO_express
-
 import random
 from edbo.feature_utils import mordred
+from gpytorch.priors import GammaPrior
 from rdkit import Chem
 from rdkit.Chem import AllChem
+import os.path
 import time
 
-MASTER_SEED = 69                      # Nice
+MASTER_SEED = 69
 #MASTER_SEED = 39  #  Potential bad algorithm performance
 SAMPLE_SIZE = 5 * (10 ** 3)
 SAMPLE_SIZE = 10 ** 4
+
+FOLDER_PATH = "test_bo_clean/"
+N_EXPERIMENTS = 50
+METHODS = ['E3I', 'EI']
+BATCH_ROUNDS = [(10, 10), (5, 20)]
 
 print("Starting encoding!")
 
@@ -50,6 +58,21 @@ encoded_df.insert(0, 'chemical_SMILES', scd.index)
 encoded_df.columns = encoded_df.columns.astype(str)
 
 
+def instantiate_bo(acquisition_func: str, batch_size: int):
+    bo = BO_express(
+        components,
+        encoding={},
+        acquisition_function=acquisition_func,
+        descriptor_matrices={'chemical': encoded_df},
+        init_method='rand',
+        batch_size=batch_size,
+        target='pce'
+    )
+    bo.lengthscale_prior = [GammaPrior(2.0, 0.2), 5.0]
+    bo.outputscale_prior = [GammaPrior(5.0, 0.5), 8.0]
+    bo.noise_prior = [GammaPrior(1.5, 0.5), 1.0]
+    return bo
+
 def fill_in_experiment_values(input_path):
     # Reading in values
     newfile = ""
@@ -77,61 +100,65 @@ def fill_in_experiment_values(input_path):
     with open(input_path, 'w') as f:
         f.write(newfile)
 
-
-def workflow(bo, export_path):
-    bo.run()
+def write_prop_read_run(bo, export_path):
     bo.export_proposed(export_path)
     fill_in_experiment_values(export_path)
     bo.add_results(export_path)
+    bo.run()
 
+def get_max_yields(bo, num_rounds):
+    results = pd.DataFrame(columns=bo.reaction.index_headers + ['pce'])
+    for path in [
+        FOLDER_PATH + 'init'
+    ] + [
+        FOLDER_PATH + f'round{num}' for num in range(num_rounds)
+    ]:
+        results = pd.concat(
+            [results, pd.read_csv(path + '.csv', index_col=0)],
+            sort=False
+        )
+    print(results)
+    return sorted(results['pce'].tolist(), reverse=True)[:5]
 
-def simulate_bo(seed, batch_size, num_rounds):
-    print("Initialising bo")
-    bo = BO_express(
-        reaction_components=components,
-        encoding={},
-        descriptor_matrices={'chemical': encoded_df},
-        acquisition_function='TS',
-        init_method='rand',
-        target='pce',
-        batch_size=batch_size,
-    )
-    print("Finished setting up bo!")
-
-    bo.init_sample(seed)
+def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
+    bo = instantiate_bo(acquisition_func, batch_size)
+    bo.init_sample(seed=seed)
     print(bo.get_experiments())
-    bo.export_proposed('init.csv')
-    fill_in_experiment_values('init.csv')
-    bo.add_results('init.csv')
+    write_prop_read_run(bo, FOLDER_PATH + 'init.csv')
 
     for num in range(num_rounds):
-        print("Starting round ", num)
-        workflow(bo, f"round{num}.csv")
-        print("Finished round ", num)
-
-    results = pd.DataFrame(columns=bo.reaction.index_headers + ['pce'])
-    for path in ['init'] + ['round' + str(num) for num in range(num_rounds)]:
-        results = pd.concat([results, pd.read_csv(path + '.csv', index_col=0)], sort=False)
-
-    results = results.sort_values('pce', ascending=False)
-
-    top_yields = results.head()['pce'].tolist()
-    return top_yields
+        print(f"Starting round {num}")
+        write_prop_read_run(bo, FOLDER_PATH + f"round{num}.csv")
+        print(f"Finished round {num}")
+    return get_max_yields(bo, num_rounds)
 
 random.seed(MASTER_SEED)
-seeds = random.sample(range(10 ** 6), 50)
+SEEDS = random.sample(range(10 ** 6), 50)
 
-results_file_path = "harvardtop5_randomts_10_100_50.csv"
-results_file = "seed,maximum observed pce, 2, 3, 4, 5" + "\n"
+for method in METHODS:
+    for batch_size, num_rounds in BATCH_ROUNDS:
+        print(
+            f"Testing bo with acquisition function {method}",
+            f"\n with a batch size of {batch_size}",
+            f"\n and doing {num_rounds} rounds",
+        )
+        results_file = "seed,maximum observed yield,2,3,4,5" + "\n"
+        path = f"harvard_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
+        path += "_new.csv"  # To differentiate with old files
+        if os.path.isfile(path):
+            # So we've already written data to it
+            # No need to overwrite
+            continue
+        for index, seed in enumerate(SEEDS):
+            print(f"On number {index} of {N_EXPERIMENTS}")
+            result = simulate_bo(
+                seed, method, batch_size, num_rounds
+            )
+            results_file += f"{seed},{','.join(str(res) for res in result)}\n"
+            print(f"{seed},{','.join(str(res) for res in result)}\n")
 
-for index, seed in enumerate(seeds):
-    print("On number ", index)
-    simulation_result = simulate_bo(seed, 10, 10)
-    print(simulation_result)
-    results_file += str(seed) + "," + ",".join(str(num) for num in simulation_result) + "\n"
-
-with open(results_file_path, 'w') as f:
-    f.write(results_file)
+        with open(path, 'w') as f:
+            f.write(results_file)
 
 """
 bad_subset = False
