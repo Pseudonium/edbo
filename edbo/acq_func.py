@@ -49,6 +49,12 @@ class acquisition:
                 batch_size,
                 duplicates
             )
+        elif function.lower() == 'e3i':
+            self.function = Kriging_believer(
+                E3I,
+                batch_size,
+                duplicates
+            )
         elif function.lower() == 'pi':
             self.function = Kriging_believer(probability_of_improvement,
                                              batch_size,
@@ -878,6 +884,65 @@ class random:
 ################
 ##### MY CODE ##
 ################
+
+# Exploration-Enhanced Expected Improvement (E3I) algorithm
+
+def E3I(model, obj, jitter=0.01):
+    """Compute exploration-enhanced expected improvement.
+
+    EI attempts to balance exploration and exploitation by accounting
+    for the amount of improvement over the best observed value.
+    
+    For E3I, you sample the posterior distribution (a la thompson)
+    M times, each time recording the max observed value,
+    and then take the max observed value as the sample mean
+    of those.
+
+    Parameters
+    ----------
+    model : edbo.models
+        Trained model.
+    obj : edbo.objective
+        Objective object containing information about the domain.
+    jitter : float
+        Parameter which controls the degree of exploration.
+
+    Returns
+    ----------
+    numpy.array
+        Computed E3I at each domain point.
+    """
+    # Domain
+    domain = to_torch(obj.domain, gpu=obj.gpu)
+
+    # Max obsereved objective value
+    if len(obj.results) == 0:
+        max_observed = 0
+    else:
+        M = 5 # arbitrary choice
+        samples = sample(model, domain, M, gpu=obj.gpu, chunk_size=20000)
+        stdev = np.sqrt(model.variance(domain))
+        # Above is list of posterior distribution samples
+        max_observed = [max(samples[i].max().item(), obj.results[obj.target].max()) for i in range(len(samples))]
+
+    # Mean and standard deviation
+    mean = model.predict(domain)
+    stdev = np.sqrt(model.variance(domain)) + 1e-6
+
+    # EI parameter values
+    EIs = []
+    for i in range(M):
+        z = (mean - max_observed[i] - jitter)/stdev
+        imp = mean - max_observed[i] - jitter
+        ei = imp * norm.cdf(z) + stdev * norm.pdf(z)
+        EIs.append(ei)
+    
+    ei = sum(EIs)/M
+    
+    ei[stdev < jitter] = 0.0
+
+    return ei
+    
 
 # Batching with a single TS and then the rest by acquisition function
 
