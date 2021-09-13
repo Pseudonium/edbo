@@ -14,6 +14,7 @@ MASTER_SEED = 69
 #MASTER_SEED = 39  #  Potential bad algorithm performance
 SAMPLE_SIZE = 5 * (10 ** 3)
 SAMPLE_SIZE = 10 ** 4
+TOP_N = 5
 
 FOLDER_PATH = "test_bo_clean/"
 N_EXPERIMENTS = 50
@@ -118,7 +119,7 @@ def get_max_yields(bo, num_rounds):
             sort=False
         )
     print(results)
-    return sorted(results['pce'].tolist(), reverse=True)[:5]
+    return sorted(results['pce'].tolist(), reverse=True)[:TOP_N]
 
 def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
     bo = instantiate_bo(acquisition_func, batch_size)
@@ -142,7 +143,9 @@ for method in METHODS:
             f"\n with a batch size of {batch_size}",
             f"\n and doing {num_rounds} rounds",
         )
-        results_file = "seed,maximum observed yield,2,3,4,5" + "\n"
+        results_file = "seed,maximum observed yield" + ",".join(
+            str(num) for num in range(2, TOP_N + 1)
+        ) + "\n"
         path = f"harvard_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
         path += "_new.csv"  # To differentiate with old files
         if os.path.isfile(path):
