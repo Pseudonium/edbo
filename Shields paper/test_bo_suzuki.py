@@ -284,9 +284,9 @@ def simulate_bo(seed, acquisition_func, batch_size, num_rounds, worst=False):
                 worst_result_dict[result]
             ) + "\n"
             count += 1
-        with open(FOLDER_PATH + 'init.csv', 'w') as f:
+        with open(TEMP_PATH + 'init.csv', 'w') as f:
             f.write(init_file)
-        bo.add_results(FOLDER_PATH + 'init.csv')
+        bo.add_results(TEMP_PATH + 'init.csv')
         bo.run()
     else:
         bo.init_sample(seed=seed)
