@@ -31,8 +31,10 @@ import os.path
 # Location of known yield results data
 RESULT_PATH = 'data/aryl_amination/experiment_index.csv'
 
-# Location used to store temporary files, to avoid cluttering this folder
+# Location used to store temp files and performance data
 FOLDER_PATH = "test_bo_aryl_amination/"
+DATA_PATH = FOLDER_PATH + "data/"
+TEMP_PATH = FOLDER_PATH + "temp/"
 
 # What we're trying to optimise
 TARGET = 'yield'
@@ -250,9 +252,9 @@ def write_prop_read_run(bo, export_path):
 def get_max_yields(bo, num_rounds):
     results = pd.DataFrame(columns=bo.reaction.index_headers + [TARGET])
     for path in [
-        FOLDER_PATH + 'init'
+        TEMP_PATH
     ] + [
-        FOLDER_PATH + f'round{num}' for num in range(num_rounds)
+        TEMP_PATH + f'round{num}' for num in range(num_rounds)
     ]:
         results = pd.concat(
             [results, pd.read_csv(path + '.csv', index_col=0)],
@@ -264,11 +266,11 @@ def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
     bo = instantiate_bo(acquisition_func, batch_size)
     bo.init_sample(seed=seed)
     print(bo.get_experiments())
-    write_prop_read_run(bo, FOLDER_PATH + 'init.csv')
+    write_prop_read_run(bo, TEMP_PATH + 'init.csv')
 
     for num in range(num_rounds):
         print(f"Starting round {num}")
-        write_prop_read_run(bo, FOLDER_PATH + f"round{num}.csv")
+        write_prop_read_run(bo, TEMP_PATH + f"round{num}.csv")
         print(f"Finished round {num}")
     return get_max_yields(bo, num_rounds)
 
@@ -287,7 +289,8 @@ for method in METHODS:
             f"\n and doing {num_rounds} rounds",
         )
         results_file = "seed,maximum observed yield" + "\n"
-        path = f"arylamination_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
+        name = f"arylamination_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
+        path = DATA_PATH + name + ".csv"
         if os.path.isfile(path):
             # So we've already written data to it
             # No need to overwrite
