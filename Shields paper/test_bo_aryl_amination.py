@@ -52,7 +52,7 @@ N_EXPERIMENTS = 50
 TOP_N = 1
 
 # The acquisition functions you'd like to test
-METHODS = ['EI', 'TS', 'rand', 'TS-EI']
+METHODS = ['EI', 'TS', 'rand']
 
 
 # (batch_size, round) pairs. Idea is to approximate an experiment budget
@@ -260,7 +260,7 @@ def get_max_yields(bo, num_rounds):
             [results, pd.read_csv(path + '.csv', index_col=0)],
             sort=False
         )
-    return sorted(results['pce'].tolist(), reverse=True)[:TOP_N]
+    return sorted(results[TARGET].tolist(), reverse=True)[:TOP_N]
 
 def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
     bo = instantiate_bo(acquisition_func, batch_size)
