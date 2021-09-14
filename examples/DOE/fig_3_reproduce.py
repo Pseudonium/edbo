@@ -18,10 +18,22 @@ import random
 ###
 
 MASTER_SEED = 213090120
+
+# Colors for the different clusters
 COLORS = ['#F72585', '#7209B7', '#3A0CA3', '#4361EE', '#4CC9F0']
 
-COLORS_2 = ['black', 'green', 'yellow']
 
+# Colors for the different arrows indicating moving in the search space.
+# Black is the explorer, red is the exploiter, yellow is the optimiser.
+COLORS_2 = ['black', 'red', 'yellow']
+
+
+# Temporary storage here.
+FOLDER_PATH = "test_bo_suzuki/"
+
+# Number of TSNE plots to make. Each plot follows 10 experiments.
+# Can have up to a maximum of 5 plots.
+NUM_PLOTS = 1
 
 #############################
 #############################
@@ -103,9 +115,13 @@ def instantiate_bo(acquisition_func: str, batch_size: int, init_method='rand'):
     bo.noise_prior = [GammaPrior(1.5, 0.5), 1.0]
     return bo
 
+# We instantiate a particular instance of the optimiser so that
+# we can see how the optimiser encodes the search space,
+# and then consequently encode the search space ourselves using TSNE.
 bo = instantiate_bo('VarMax', 1)
 
-FOLDER_PATH = "test_bo_suzuki/"
+
+
 #####
 # Constructing kmeans clusters
 ####
@@ -114,28 +130,24 @@ data_embedded = TSNE(init='pca').fit_transform(bo.reaction.data)
 
 N_CLUSTERS = 5
 kmeans = KMeans(n_clusters=N_CLUSTERS).fit_predict(bo.reaction.data)
-cm = matplotlib.cm.get_cmap(name='viridis')
-norm = matplotlib.colors.Normalize(vmin=0.0, vmax=N_CLUSTERS)
 colors = [COLORS[thing] for thing in kmeans]
 
-
-plots = [plt.subplots(1) for i in range(1)]
+plots = [plt.subplots(1) for i in range(NUM_PLOTS)]
 fig_clusters = [item[0] for item in plots]
 axs_clusters = [item[1] for item in plots]
 
-#fig_cluster, axs_cluster = plt.subplots(1)
 for cluster in axs_clusters:
     cluster.scatter([item[0] for item in data_embedded], [item[1] for item in data_embedded], c=colors)
     cluster.set_xlabel('t-SNE1')
     cluster.set_ylabel('t-SNE2')
     cluster.set_title('Paths taken in reaction space')
 
-#fig_3b, (axs_r2, axs_yield) = plt.subplots(nrows=2, ncols=1, sharex=True)
+fig_3b, (axs_r2, axs_yield) = plt.subplots(nrows=2, ncols=1, sharex=True)
 
-#axs_yield.set_xlabel('Experiment')
+axs_yield.set_xlabel('Experiment')
 
-#axs_r2.set_ylabel('Model fit score')
-#axs_yield.set_ylabel('Observed yield')
+axs_r2.set_ylabel('Model fit score')
+axs_yield.set_ylabel('Observed yield')
 
 ####################################
 ####################################
@@ -146,6 +158,10 @@ for cluster in axs_clusters:
 RESULT_PATH = 'data/suzuki/experiment_index.csv'
 NUM_ROUNDS = 10
 
+
+# Colormap for indicating color of points on path. Turned out to be unnecessary,
+# went with arrows instead for indicating order of points. Kept for
+# completeness.
 path_cm = matplotlib.cm.get_cmap(name='Reds')
 path_norm = matplotlib.colors.Normalize(vmin=0.0, vmax=NUM_ROUNDS)
 
@@ -175,10 +191,10 @@ def fill_in_experiment_values(input_path):
     return input_yield
 
 
+# Refer to matplotlib linestyles for an explanation of these.
 styles = [(0, (1, 4)), 'solid', (0, (5, 15))]
 
 def workflow(export_path, count=0, indices=None, fig=0, plot=None):
-    #Function for our BO pipeline.
 
     if indices is None:
         indices = []
@@ -187,12 +203,17 @@ def workflow(export_path, count=0, indices=None, fig=0, plot=None):
     new_experiment_index = bo.get_experiments().index[0]
     indices.append(new_experiment_index)
     if len(indices) > 1 and plot is not None:
-        axs_clusters[plot].scatter([data_embedded[new_experiment_index][0]], [data_embedded[new_experiment_index][1]], color=path_cm(path_norm(count)), s=9)
-        x, y = data_embedded[indices[count - 1]]
+        axs_clusters[plot].scatter(
+            [data_embedded[new_experiment_index][0]],
+            [data_embedded[new_experiment_index][1]],
+            color=path_cm(path_norm(count)),
+            s=9 # The size
+        )
+        x, y = data_embedded[indices[count - 1]] # Previous point.
         x_new, y_new = data_embedded[indices[count]]
         dx, dy = x_new - x, y_new - y
         arr = axs_clusters[plot].arrow(
-            x, y, dx, dy,
+            x, y, dx, dy, # plot an arrow from previous to current point.
             width=0.3,
             length_includes_head=True,
             head_width = 3,
@@ -234,7 +255,11 @@ def simulate_bo(bo, fig_num):
                 count=num,
                 indices=indices,
                 fig=fig_num,
-                plot=[None, 0][num < 10]
+                plot=[None, 0][num < 10] # This is for a single plot
+                # For the first 10 rounds, it plots the arrows
+                # beyond that, it doesn't plot anything.
+                # for multiple plots (e.g. 5), just use
+                # plot = num // 10
             )
         except RuntimeError as e:
             print(e)
@@ -249,9 +274,9 @@ def simulate_bo(bo, fig_num):
 
     # The very first score tends to be very negative, so instead
     # we will ignore the first one
-    #axs_r2.plot(list(range(NUM_ROUNDS))[1:], r2_values[1:], color=COLORS[fig_num])
+    axs_r2.plot(list(range(NUM_ROUNDS))[1:], r2_values[1:], color=COLORS[fig_num])
 
-    #axs_yield.plot(list(range(NUM_ROUNDS + 1)), obs_yields, color=COLORS[fig_num])
+    axs_yield.plot(list(range(NUM_ROUNDS + 1)), obs_yields, color=COLORS[fig_num])
 
 
 simulate_bo(bo, 0)
@@ -266,17 +291,38 @@ simulate_bo(bo, 2)
 
 axs_clusters[0].legend()
 
-"""
+
+
+############
+############
+# The following code is for producing fig_3c.csv,
+# which is needed to produce the diagrams for figure 3c.
+
 NUM_ROUNDS = 10
 NUM_AVG = 50
 
 fig_max_yield, axs_max_yield = plt.subplots(1)
 
 random.seed(MASTER_SEED)
+# Ensure consistency across methods
 seeds = random.sample(range(10 ** 6), NUM_AVG)
 
-def simulate_bo_2(method, fig_num):
-    # Doing an average of ~ 5 here, so use the master seed to make a random sample
+def simulate_bo_2(method):
+    """
+    Simulate the optimiser given the acquisition function method.
+
+
+    The idea is to run the optimiser NUM_AVG times,
+    with a batch size of 5 and NUM_ROUNDS rounds each time.
+    Each time you run the optimiser, at the end,
+    we take the data in the round1.csv, round2.csv etc.,
+    and calculate at each round what the maximum observed yield was thus far.
+
+    This data is then put into a pandas dataframe,
+    where each entry corresponds to a run of the optimiser,
+    and each column corresponds to a rounds number,
+    to make a table with NUM_AVG rows and NUM_ROUNDS columns.
+    """
 
 
     full_yields = []
@@ -304,7 +350,11 @@ def simulate_bo_2(method, fig_num):
             results = pd.concat([results, pd.read_csv(path + '.csv', index_col=0)], sort=False)
             results = results.sort_values('yield', ascending=False)
             max_yields.append(results['yield'].tolist()[0])
+            # At each round, we determine the maximum observed yield thus far,
+            # recording this in a dataframe.
 
+        # This is appended to once for every seed in seeds, so a total
+        # of NUM_AVG times.
         full_yields.append(max_yields)
     return pd.DataFrame.from_records(full_yields)
 
@@ -314,12 +364,18 @@ methods = ['EI', 'TS', 'greedy', 'MeanMax', 'VarMax']
 yield_df = pd.DataFrame(columns=['method'].extend(range(11)))
 yield_df['method'] = methods
 
+# yield_df will have len(methods) rows,
+# and 11 columns.
+# Column x corresponds to the average maximal observed yield observed at
+# round x, for the method, averaged over all NUM_AVG optimiser runs.
+# e.g. if NUM_AVG was 2, and for EI at round 5 the maximal yields observed
+# were 30 and 40, then the corresponding yield_df entry would be 35.
+
 yield_dict = {}
 
 for index, method in enumerate(methods):
     print("TRYING OUT METHOD ", method)
     result = simulate_bo_2(method, index)
-    #yield_df = pd.concat(yield_df, )
     yield_dict[method] = result
 
 for key, value in yield_dict.items():
@@ -330,26 +386,9 @@ full_yield_df = pd.DataFrame()
 for value in yield_dict.values():
     full_yield_df = pd.concat([full_yield_df, value])
 
+
+# Once this is made once, this section of the code does not need to be run again.
+# Hence, you can just use the existing fig3c.csv, and comment this section out.
 full_yield_df.to_csv('fig3c.csv')
-"""
-
-# Have already computed the above
-# Now just need to read in the file and produce the plot
-
-"""
-full_yield_df = pd.read_csv('fig3c.csv')
-
-# Start with plotting the graph, which needs the average, as well as the
-# standard deviation for EI specifically
-
-average_df = pd.DataFrame(columns=['method'].extend(range(11)))
-
-result_df = full_yield_df[full_yield_df['method'] == 'EI']
-print('Initial result dataframe: ', result_df)
-
-print(r'Now aggregated into mean: \n', result_df.agg(func='mean').loc('4'))
-print('New result dataframe: ', result_df)
-print('Full one is still untouched: ', full_yield_df)
-"""
 
 plt.show()
