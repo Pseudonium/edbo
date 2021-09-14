@@ -164,6 +164,20 @@ with open(RESULT_PATH) as f:
         # so ignore it.
     }
 
+# This function is specifically for 'worst' initial selection
+# To use it, set worst=True in simulate_bo.
+# You'll need to manually alter the naming scheme.
+
+def get_worst_percentile(full_result_dict, centile=10):
+    # Get the bottom centile% of experiments from the results table.
+    number_of_results = len(full_result_dict)
+    sorted_by_yield = sorted(full_result_dict.items(), key=lambda item: item[1])
+    bottom_centile = sorted_by_yield[:int(0.01 * centile * number_of_results)]
+    return dict(bottom_centile)
+
+
+
+
 def instantiate_bo(acquisition_func: str, batch_size: int):
     bo = BO_express(
         components,
@@ -253,11 +267,28 @@ def get_max_yields(bo, num_rounds):
         )
     return sorted(results[TARGET].tolist(), reverse=True)[:TOP_N]
 
-def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
+def simulate_bo(seed, acquisition_func, batch_size, num_rounds, worst=False):
     bo = instantiate_bo(acquisition_func, batch_size)
-    bo.init_sample(seed=seed)
-    print(bo.get_experiments())
-    write_prop_read_run(bo, TEMP_PATH + 'init.csv')
+    if worst:
+
+        # Choose from bottom 10% of experiments
+        worst_result_dict = get_worst_percentile(FULL_RESULT_DICT, centile=10)
+        init_file = ",base_SMILES_index,ligand_SMILES_index,solvent_SMILES_index,Concentration_index,Temp_C_index,yield\n"
+        count = 1
+        random.seed(seed)
+        for result in random.sample(list(worst_result_dict.keys()), batch_size):
+            init_file += str(count) + "," + result + "," + str(
+                worst_result_dict[result]
+            ) + "\n"
+            count += 1
+        with open(FOLDER_PATH + 'init.csv', 'w') as f:
+            f.write(init_file)
+        bo.add_results(FOLDER_PATH + 'init.csv')
+        bo.run()
+    else:
+        bo.init_sample(seed=seed)
+        print(bo.get_experiments())
+        write_prop_read_run(bo, TEMP_PATH + 'init.csv')
 
     for num in range(num_rounds):
         print(f"Starting round {num}")
