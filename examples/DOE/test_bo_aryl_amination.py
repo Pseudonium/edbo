@@ -34,6 +34,9 @@ RESULT_PATH = 'data/aryl_amination/experiment_index.csv'
 # Location used to store temporary files, to avoid cluttering this folder
 FOLDER_PATH = "test_bo_aryl_amination/"
 
+# What we're trying to optimise
+TARGET = 'yield'
+
 # Seed used to ensure repeatability
 MASTER_SEED = 42
 
@@ -41,6 +44,10 @@ MASTER_SEED = 42
 # where a configuration is a combination of acquisition function,
 # batch size and a number of rounds.
 N_EXPERIMENTS = 50
+
+# For each test of the optimiser, the number of top values you'd like
+# to store in the performance data file.
+TOP_N = 1
 
 # The acquisition functions you'd like to test
 METHODS = ['EI', 'TS', 'rand']
@@ -173,7 +180,7 @@ def instantiate_bo(acquisition_func: str, batch_size: int):
         init_method='rand', # Allows control of initial experiments,
         # via seeds.
         batch_size=batch_size,
-        target='yield' # What we are trying to optimise.
+        target=TARGET
     )
 
     # The priors are set to the ones in the paper, for consistency.
@@ -240,8 +247,8 @@ def write_prop_read_run(bo, export_path):
     bo.run()
 
 
-def get_max_yield(bo, num_rounds):
-    results = pd.DataFrame(columns=bo.reaction.index_headers + ['yield'])
+def get_max_yields(bo, num_rounds):
+    results = pd.DataFrame(columns=bo.reaction.index_headers + [TARGET])
     for path in [
         FOLDER_PATH + 'init'
     ] + [
@@ -251,8 +258,7 @@ def get_max_yield(bo, num_rounds):
             [results, pd.read_csv(path + '.csv', index_col=0)],
             sort=False
         )
-    print(results)
-    return results['yield'].max()
+    return sorted(results['pce'].tolist(), reverse=True)[:TOP_N]
 
 def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
     bo = instantiate_bo(acquisition_func, batch_size)
@@ -264,22 +270,14 @@ def simulate_bo(seed, acquisition_func, batch_size, num_rounds):
         print(f"Starting round {num}")
         write_prop_read_run(bo, FOLDER_PATH + f"round{num}.csv")
         print(f"Finished round {num}")
-    return get_max_yield(bo, num_rounds)
+    return get_max_yields(bo, num_rounds)
 
 
-
-# Format is reaction_choosingmethod_batchsize_experimentbudget_numberofrunsdone
-# Key of choosingmethods:
-# random - chosen at random using expected improvement as acquisition function
-# worst - randomly chosen from bottom 10% of experiments using expected improvement
-# randomts - chosen at random using thompson sampling
-# randomtsei - chosen at random using hybrid thompson sampling and expected improvement (my own modification, not the ei-ts builtin
-
-
-# New key of choosing methods (no longer doing worst)
+# Key of acquisition functions
 # EI - expected improvement
 # TS - Thompson sampling
-# TS-EI - hybrid
+# TS-EI - hybrid (custom implementation, 1 TS and n - 1 EI for batch size n)
+# EI-TS - hybrid (default implementation, 1 EI and n - 1 TS for batch size n)
 
 for method in METHODS:
     for batch_size, num_rounds in BATCH_ROUNDS:
@@ -290,7 +288,6 @@ for method in METHODS:
         )
         results_file = "seed,maximum observed yield" + "\n"
         path = f"arylamination_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
-        path += "_new.csv"  # To differentiate with old files
         if os.path.isfile(path):
             # So we've already written data to it
             # No need to overwrite
