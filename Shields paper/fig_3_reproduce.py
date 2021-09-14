@@ -29,7 +29,7 @@ COLORS_2 = ['black', 'red', 'yellow']
 
 
 # Temporary storage here.
-FOLDER_PATH = "test_bo_suzuki/"
+FOLDER_PATH = "test_bo_suzuki/temp/"
 
 # Number of TSNE plots to make. Each plot follows 10 experiments.
 # Can have up to a maximum of 5 plots.
