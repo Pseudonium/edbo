@@ -1,0 +1,3 @@
+,aryl_halide_SMILES_index,additive_SMILES_index,base_SMILES_index,ligand_index,yield
+828,CCc1ccc(Cl)cc1,o1ccc(n1)c2ccccc2,CN(C)/C(N(C)C)=N\C(C)(C)C,CC(C)C1=CC(C(C)C)=CC(C(C)C)=C1C2=C(P(C3CCCCC3)C4CCCCC4)C=CC=C2,5.370036774
+1532,FC(F)(F)c1ccc(Cl)cc1,COC(=O)c1cc(on1)c2occc2,CN(C)P(N(C)C)(N(C)C)=NP(N(C)C)(N(C)C)=NCC,CC(C)C1=CC(C(C)C)=CC(C(C)C)=C1C2=C(P(C3CCCCC3)C4CCCCC4)C=CC=C2,6.618305452
