@@ -306,7 +306,9 @@ for method in METHODS:
             f"\n with a batch size of {batch_size}",
             f"\n and doing {num_rounds} rounds",
         )
-        results_file = "seed,maximum observed yield" + "\n"
+        results_file = "seed,maximum observed yield" + ",".join(
+            str(num) for num in range(2, TOP_N + 1)
+        ) + "\n"
         name = f"iridium_{method}_{batch_size}_{batch_size * num_rounds}_{N_EXPERIMENTS}"
         path = DATA_PATH + name + ".csv"
         if os.path.isfile(path):
