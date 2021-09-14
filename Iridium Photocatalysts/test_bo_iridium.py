@@ -1,5 +1,5 @@
 '''
-Testing the optimiser on the aryl amination dataset
+Testing the optimiser on the iridium photocatalyst dataset
 
 Some additional acquisition functions were added to the optimiser algorithm
 in the acq_func.py file, so to import these we need to point to
